@@ -4,6 +4,12 @@ A lightweight DirectInput8 (`dinput8.dll`) proxy DLL and plugin loader for **LEG
 
 This tool acts as the root entry point for the game process, automatically discovering and loading mod plugins from a `plugins/` folder without requiring separate system DLL proxy names (e.g. `dxgi.dll`, `d3d11.dll`) or fighting with tools like ReShade or Special K.
 
+## PLEASE READ
+
+Due to the way these plugins work please only install plugins from sources you really do trust because these plugins are just like any other DLL file and is able to execute code.
+
+I strongly recommend only installing a plugin you have built your self from a public open source repo from someone trust worthy or take the time to understand what a plugin is doing and general common sense for noticing malicious intent behind code.  
+
 ---
 
 ## Table of Contents
