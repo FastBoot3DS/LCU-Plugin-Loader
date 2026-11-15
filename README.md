@@ -12,6 +12,7 @@ This tool acts as the root entry point for the game process, automatically disco
 - [Building](#building)
   - [Option A: Via VS Code (Recommended)](#option-a-via-vs-code-recommended)
   - [Option B: Via Command Line](#option-b-via-command-line)
+- [Releases](#releases)
 - [Installation & Setup](#installation--setup)
 - [Plugin Organization Guide](#plugin-organization-guide)
   - [Folder Structure](#folder-structure)
@@ -77,6 +78,12 @@ The script verifies:
 2. The compiler targets `x86_64-w64-mingw32` or Windows.
 3. Compiles with `-O2 -std=c++17 -static -static-libgcc -static-libstdc++`.
 4. Outputs the finished binary to `bin/dinput8.dll`.
+
+## Releases
+
+Pushing a version tag such as `v1.0.0` triggers a GitHub Actions workflow that
+builds `dinput8.dll` and attaches it to a GitHub release with generated release
+notes.
 
 ---
 

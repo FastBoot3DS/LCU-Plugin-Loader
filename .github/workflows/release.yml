@@ -1,0 +1,37 @@
+name: Build and publish release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Set up MinGW-w64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: mingw-w64-ucrt-x86_64-gcc
+
+      - name: Build DLL
+        run: python build.py
+        env:
+          CXX: C:\msys64\ucrt64\bin\g++.exe
+
+      - name: Create GitHub release and upload DLL
+        run: gh release create "$env:GITHUB_REF_NAME" bin/dinput8.dll --verify-tag --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
