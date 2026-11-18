@@ -23,9 +23,10 @@ I strongly recommend only installing a plugin you have built your self from a pu
 - [Plugin Organization Guide](#plugin-organization-guide)
   - [Folder Structure](#folder-structure)
   - [Disabling Plugins](#disabling-plugins)
+  - [Plugin manifest](#plugin-manifest)
 - [Plugin Developer API](#plugin-developer-api)
   - [Lifecycle Hooks](#lifecycle-hooks)
-  - [Shared Logging](#shared-logging)
+  - [Manifest plugin logging](#manifest-plugin-logging)
 - [Repository Structure](#repository-structure)
 
 ---
@@ -36,7 +37,8 @@ I strongly recommend only installing a plugin you have built your self from a pu
 * **Folder-Per-Plugin Architecture**: Mods can live in their own dedicated folders alongside config files (`.ini`, `.json`), assets, and dependencies.
 * **Altered Search Path**: Uses `LOAD_WITH_ALTERED_SEARCH_PATH` so plugins inside subdirectories can resolve their own private dependency DLLs automatically.
 * **Non-Blocking Async Init**: Plugin discovery and loading runs on a background worker thread during startup to avoid hanging the game's initial window creation.
-* **Thread-Safe Unified Logging**: Exports `PluginLog` from `dinput8.dll` with SRWLock protection so all plugins can output to `PluginLoader.log`.
+* **Loader-Only Logging**: `PluginLoader.log` contains loader diagnostics; manifest-backed plugins can write to their own per-plugin logs.
+* **Plugin Manifests and Per-Plugin Logs**: Folder-based plugins can declare metadata in `plugin.json` and use the loader API to write to their own `plugins/<folder>/logs/` directory.
 * **Instant Toggle**: Disable any mod or folder instantly by appending `.disabled` or prefixing with `_`.
 
 ---
@@ -121,6 +123,7 @@ LEGO City Undercover/
 ├── PluginLoader.log                 <-- Output log
 └── plugins/
     ├── TowTruckTweaks/              <-- Dedicated folder
+    │   ├── plugin.json              <-- Optional plugin metadata and entry point
     │   ├── TowTruckTweaks.dll       <-- Mod binary
     │   └── config.ini               <-- Mod settings
     ├── MultiplayerMod/              <-- Dedicated folder
@@ -136,6 +139,34 @@ To temporarily disable a mod without deleting it:
 * **Disable a DLL**: Append `.disabled` (e.g. `plugins/TowTruckTweaks/TowTruckTweaks.dll.disabled`) or prefix with `_` (e.g. `_StandaloneTool.dll`).
 
 The loader will automatically ignore these files and folders during discovery.
+
+### Plugin manifest
+
+`plugin.json` is optional for backwards compatibility. If present in a plugin
+folder, the loader validates it and loads only the declared entry DLL; an
+invalid manifest or missing entry DLL causes that plugin folder to be skipped.
+Plugins without a manifest, including loose DLLs in `plugins/`, continue to load
+using the legacy behavior.
+
+The manifest is a flat JSON object containing string values:
+
+```json
+{
+  "schemaVersion": "1",
+  "id": "tow-truck-tweaks",
+  "name": "Tow Truck Tweaks",
+  "version": "1.0.0",
+  "author": "Example Author",
+  "description": "Small gameplay tweaks for tow trucks.",
+  "repository": "https://github.com/example/tow-truck-tweaks",
+  "entryDll": "TowTruckTweaks.dll"
+}
+```
+
+`schemaVersion`, `id`, `name`, `version`, `author`, and `entryDll` are required.
+`id` must use lowercase letters, digits, hyphens, and underscores. `entryDll`
+must be a DLL filename in the same folder. `description` and `repository` are
+optional; the repository URL, when provided, must use HTTP or HTTPS.
 
 ---
 
@@ -163,25 +194,33 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 }
 ```
 
-### Shared Logging
+### Manifest plugin logging
 
-`dinput8.dll` exports `PluginLog(const char* format, ...)`. If you want your plugin to write to the common `PluginLoader.log`:
+Manifest-backed plugins can export `PluginInitV2` and receive their plugin
+identity and a loader-managed logger. The loader serializes writes and stores
+the log in
+`plugins/<plugin-folder>/logs/<plugin-id>.log`:
 
 ```cpp
-#include <windows.h>
+#include "PluginAPI.h"
 
-typedef void (*PluginLog_t)(const char* format, ...);
-
-void LogToGame(const char* msg) {
-    HMODULE hLoader = GetModuleHandleA("dinput8.dll");
-    if (hLoader) {
-        PluginLog_t pfnLog = reinterpret_cast<PluginLog_t>(GetProcAddress(hLoader, "PluginLog"));
-        if (pfnLog) {
-            pfnLog("[MyMod] %s\n", msg);
-        }
-    }
+extern "C" __declspec(dllexport)
+void PluginInitV2(const PluginLoaderAPI* api) {
+    api->log(api->loggerContext, PLUGIN_LOG_INFO, "Initialized version %s",
+             "1.0.0");
 }
 ```
+
+`PluginAPI.h` is in the loader's `include/` directory. The API version is `1`.
+The logger callback accepts `printf`-style arguments and supports
+`PLUGIN_LOG_DEBUG`, `PLUGIN_LOG_INFO`, `PLUGIN_LOG_WARNING`, and
+`PLUGIN_LOG_ERROR`. `PluginInitV2` takes precedence over the existing
+`PluginInit`/`ModInit` hooks; those legacy hooks remain supported.
+The old shared `PluginLog` and `LCU_Log` exports are removed; plugins using
+those exports should migrate to this manifest-based API.
+
+This convention controls logs written through the loader API; native plugins
+are unrestricted DLLs and can still write files directly elsewhere.
 
 ---
 
@@ -194,7 +233,8 @@ LCU-PluginLoader/
 ├── bin/
 │   └── dinput8.dll                  <-- Built proxy DLL binary
 ├── include/
-│   └── PluginLoader.h               <-- Plugin loader interface
+│   ├── PluginLoader.h               <-- Plugin loader interface
+│   └── PluginAPI.h                  <-- Public plugin metadata/logging API
 ├── src/
 │   ├── main.cpp                     <-- DirectInput8 proxy exports, DllMain & logging
 │   └── PluginLoader.cpp             <-- Plugin scanner & loader implementation

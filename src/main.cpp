@@ -77,34 +77,6 @@ extern "C" __declspec(dllexport) HRESULT WINAPI DirectInput8Create(
     return g_realDirectInput8Create(instance, version, interfaceId, output, outer);
 }
 
-extern "C" __declspec(dllexport) void PluginLog(const char* format, ...) {
-    char message[2048];
-    va_list args;
-    va_start(args, format);
-    const int length = std::vsnprintf(message, sizeof(message), format, args);
-    va_end(args);
-
-    if (length < 0) {
-        OutputDebugStringA("[PluginLoader] External log formatting failed.\n");
-        return;
-    }
-    message[sizeof(message) - 1] = '\0';
-    Log("%s", message);
-}
-
-// Backwards-compatible alias for existing plugins
-extern "C" __declspec(dllexport) void LCU_Log(const char* format, ...) {
-    char message[2048];
-    va_list args;
-    va_start(args, format);
-    const int length = std::vsnprintf(message, sizeof(message), format, args);
-    va_end(args);
-
-    if (length < 0) return;
-    message[sizeof(message) - 1] = '\0';
-    Log("%s", message);
-}
-
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(instance);
